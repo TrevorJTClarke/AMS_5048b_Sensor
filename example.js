@@ -12,6 +12,7 @@ Only I2C is supported. (AS5048A has SPI version)
 Parts of the module is based on the driver written by SOSAndroid.fr (E. Ha.):
 I2Cdev device library code is placed under the MIT license
 Copyright (c) 2013 SOSAndroid.fr (E. Ha.)
+https://github.com/sosandroid/AMS_AS5048B
 
 Software License Agreement (BSD License)
 
@@ -157,7 +158,13 @@ AS5048B.prototype.doProg = function () {
 /**
  * write I2C address value (5 bits) into the address register
  *
- * @param register value
+ * @param slave address value
+ *
+ * @description (From Data Sheet)
+ * The slave address consists of the hardware setting on pins A1,
+ * A2. The MSB of the slave address (yellow) is internally inverted.
+ * This means that by default the resulting data is ‘1’. A read of the
+ * I²C slave address register 21 will return a ‘0’ at the MSB.
  */
 AS5048B.prototype.addressRegWrite = function (val) {
   var data = new Uint8Array(val);
@@ -167,7 +174,6 @@ AS5048B.prototype.addressRegWrite = function (val) {
 
 	// update our chip address with our 5 programmable bits
 	// the MSB is internally inverted, so we flip the leftmost bit
-	// TODO: VERIFY!!!!!!!!!!
 	this.chipAddress = ((data << 2) | (this.chipAddress & 0b11)) ^ (1 << 6);
 }
 
@@ -178,25 +184,53 @@ AS5048B.prototype.addressRegRead = function () {
 
 /* sets current angle as the zero position */
 AS5048B.prototype.setZeroPosition = function () {
-  var _this = this;
-
-	var newZero = _this.readReg16(this.AS5048B_ANGLMSB_REG);
-	this.zeroRegWrite(new Uint8Array(0x00)); //Issue closed by @MechatronicsWorkman
-	this.zeroRegWrite(newZero);
+	var newZero = this.readReg16(this.AS5048B_ANGLLSB_REG);
+  console.log('newZero', newZero);
+	this.zeroRegWrite(0x00); //Issue closed by @MechatronicsWorkman
+	// this.zeroRegWrite(newZero);
 }
 
 /**
  * writes the 2 bytes Zero position register value
  *
- * @param register value
+ * @param register value (16bit, broken into 8bits)
+ *
+ * @description (From Data Sheet)
+ * Programming of the Zero Position: The absolute angle
+ * position can be permanent programmed over the interface.
+ * This could be useful for random placement of the magnet on
+ * the rotation axis. A readout at the mechanical zero position can
+ * be performed and written back into the IC. With permanent
+ * programming the position is non-reversible stored in the IC.
+ * This programming can be performed only once.
+ * To simplify the calculation of the zero position it is only needed
+ * to write the value in the IC which was read out before from the
+ * angle register.
+ *
+ * Programming Sequence with Verification:
+ * To program the zero position is needed to
+ * perform following sequence:
+ *  1. Write 0 into OTP zero position register to clear
+ *  2. Read angle information
+ *  3. Write previous read angle position into OTP zero
+ * position register
+ * Now the zero position is set.
+ * If you want to burn it to the OTP register send:
+ *  4. Set the Programming Enable bit in the OTP control
+ * register
+ *  5. Set the Burn bit to start the automatic programming
+ * procedure
+ *  6. Read angle information (equals to 0)
+ *  7. Set the Verify bit to load the OTP data again into the
+ * internal registers
+ *  8. Read angle information (equals to 0)
+ *
+ * TODO: Update to utilize this flow!!
  */
 AS5048B.prototype.zeroRegWrite = function (val) {
-  var data = new Uint8Array(val);
-
-  // TODO: TEST!!!!!!!!!
   // adjusts bits to conform to standards
-	this.writeReg(this.AS5048B_ZEROMSB_REG, (regVal >> 6));
-	this.writeReg(this.AS5048B_ZEROLSB_REG, (regVal & 0x3F));
+	this.writeReg(this.AS5048B_ZEROMSB_REG, (val >> 6));
+	this.writeReg(this.AS5048B_ZEROLSB_REG, (val & 0x3F));
 }
 
 /* reads the 2 bytes Zero position register value */
@@ -284,8 +318,7 @@ AS5048B.prototype.updateMovingAvgExp = function () {
  * @return exponential moving averaged angle value
  */
 AS5048B.prototype.getMovingAvgExp = function (unit) {
-  var _this = this;
-	return this.convertAngle(unit, _this.movingAvgExpAngle);
+	return this.convertAngle(unit, this.movingAvgExpAngle);
 }
 
 /* resets moving AVG */
@@ -381,8 +414,6 @@ AS5048B.prototype.readReg8 = function (reg, length) {
   //8 bit value got from 1 8bits register
   this.i2c.writeTo(this.addr, reg);
   var d = this.i2c.readFrom(this.addr, length);
-  console.log('readReg8:  ', reg, d[0]);
-  // TODO: Verify this is valid
   return d[0];
 }
 
@@ -402,11 +433,13 @@ AS5048B.prototype.readReg16 = function (reg, length) {
   return i;
 }
 
-// TODO: TEST!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// TODO: Seems wrong?
 // writes to a specific register within initialized address
 AS5048B.prototype.writeReg = function (reg, data) {
-  console.log('writeReg: data', reg, data, [reg].concat(data));
-  this.i2c.writeTo(this.addr, [reg].concat(data));
+  var arr = [reg].concat(data);
+  var formatted = new Uint16Array(arr);
+  console.log('writeReg: data', reg, data, arr, formatted);
+  this.i2c.writeTo(this.addr, formatted);
 }
 
 // ------------------------------------------------------
@@ -414,7 +447,14 @@ AS5048B.prototype.writeReg = function (reg, data) {
 
 I2C1.setup({ scl: B6, sda: B7 });
 var as = new AS5048B(I2C1);
-setInterval(function(){
-  var angl = as.angleRead(as.U_DEG, true);
-  console.log('angl:', angl);
-}, 2000);
+var angl = as.angleRead(as.U_DEG, true);
+console.log('zeroRegRead', as.zeroRegRead())
+console.log('setZeroPosition', as.setZeroPosition())
+angl = as.angleRead(as.U_DEG, true);
+// console.log('updateMovingAvgExp', as.updateMovingAvgExp())
+// console.log('getMovingAvgExp', as.getMovingAvgExp())
+
+// setInterval(function(){
+//   var angl = as.angleRead(as.U_DEG, true);
+//   console.log('angl:', angl);
+// }, 2000);
