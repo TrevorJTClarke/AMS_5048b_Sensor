@@ -42,10 +42,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 /* Module constants */
-var C = {
-  // OPERATIONS TODO: both need different implementations
-  SERIAL_DEBUG_ENABLED: false,
-  USE_WIREBEGIN_ENABLED: false, // to comment if Wire.begin() function is called in Setup() for instance. Usefull to manage one or several I2C devices in the same sketch
+var ASC = {
 
   // Moving Exponential Average on angle - beware heavy calculation for some boards
   // This is a 1st order low pass filter
@@ -84,9 +81,9 @@ var R = {
   AS5048B_RESOLUTION: 16384.0 //14 bits
 };
 
-exports.connect = function (_i2c, _addr) {
-  return new AS5048B(_i2c, _addr);
-};
+// exports.connect = function (_i2c, _addr) {
+//   return new AS5048B(_i2c, _addr);
+// };
 
 /* AS5048B Object */
 function AS5048B(_i2c, _addr) {
@@ -94,7 +91,6 @@ function AS5048B(_i2c, _addr) {
   this.addr = _addr || R.AS5048_ADDRESS;
 
   // standard internal variables
-	this.debugFlag = false;
 	this.clockWise = true;
 	this.chipAddress = new Uint8Array(0);
 	this.addressRegVal = new Uint8Array(0);
@@ -115,21 +111,20 @@ AS5048B.prototype.initialize = function() {
   this.clockWise = false;
 	this.lastAngleRaw = 0.0;
 
-  // 1. read zero & angle
-  // 2. write zero to 0
-  // 3. write zero to current value
-  // 4. ready to operate
-	this.zeroRegVal = this.zeroRegRead();
-	this.addressRegVal = this.addressRegRead();
+  var tmp = this.readReg16(R.AS5048B_ANGLLSB_REG, 2);
+  console.log('tmp', tmp);
+  var cnvt = this.convertAngle(ASC.U_DEG, tmp);
+  console.log('AS5048B_ANGLMSB_REG', cnvt);
 
-	this.resetMovingAvgExp();
+  // // 1. read zero & angle
+  // // 2. write zero to 0
+  // // 3. write zero to current value
+  // // 4. ready to operate
+	// this.zeroRegVal = this.zeroRegRead();
+	// this.addressRegVal = this.addressRegRead();
+  //
+	// this.resetMovingAvgExp();
 };
-
-/* Toggles on/off debug mode */
-/* NOTE: This currently does nothing :) */
-AS5048B.prototype.toggleDebug = function () {
-	this.debugFlag = !this.debugFlag;
-}
 
 /**
  * Set / unset clock wise counting - sensor counts CCW natively
@@ -189,7 +184,6 @@ AS5048B.prototype.addressRegWrite = function (val) {
 
 /* reads I2C address register value */
 AS5048B.prototype.addressRegRead = function () {
-
 	return this.readReg8(R.AS5048B_ADDR_REG);
 }
 
@@ -210,9 +204,10 @@ AS5048B.prototype.setZeroPosition = function () {
 AS5048B.prototype.zeroRegWrite = function (val) {
   var data = new Uint8Array(val);
 
-  // TODO: NEED HELP MAKING THIS CHANGE!
-	this.writeReg(R.AS5048B_ZEROMSB_REG, (uint8_t) (regVal >> 6));
-	this.writeReg(R.AS5048B_ZEROLSB_REG, (uint8_t) (regVal & 0x3F));
+  // TODO: TEST!!!!!!!!!
+  // adjusts bits to conform to standards
+	this.writeReg(R.AS5048B_ZEROMSB_REG, (regVal >> 6));
+	this.writeReg(R.AS5048B_ZEROLSB_REG, (regVal & 0x3F));
 }
 
 /* reads the 2 bytes Zero position register value */
@@ -274,14 +269,14 @@ AS5048B.prototype.angleRead = function (unit, newVal) {
 AS5048B.prototype.updateMovingAvgExp = function () {
 
 	//sine and cosine calculation on angles in radian
-	var angle = this.angleRead(C.U_RAD, true);
+	var angle = this.angleRead(ASC.U_RAD, true);
 
-	if (this.movingAvgCountLoop < C.EXP_MOVAVG_LOOP) {
+	if (this.movingAvgCountLoop < ASC.EXP_MOVAVG_LOOP) {
 		this.movingAvgExpSin += Math.sin(angle);
 		this.movingAvgExpCos += Math.cos(angle);
-		if (this.movingAvgCountLoop == (C.EXP_MOVAVG_LOOP - 1)) {
-			this.movingAvgExpSin = this.movingAvgExpSin / C.EXP_MOVAVG_LOOP;
-			this.movingAvgExpCos = this.movingAvgExpCos / C.EXP_MOVAVG_LOOP;
+		if (this.movingAvgCountLoop == (ASC.EXP_MOVAVG_LOOP - 1)) {
+			this.movingAvgExpSin = this.movingAvgExpSin / ASC.EXP_MOVAVG_LOOP;
+			this.movingAvgExpCos = this.movingAvgExpCos / ASC.EXP_MOVAVG_LOOP;
 		}
 		this.movingAvgCountLoop++;
 	} else {
@@ -309,7 +304,7 @@ AS5048B.prototype.getMovingAvgExp = function (unit) {
 AS5048B.prototype.resetMovingAvgExp = function () {
 	this.movingAvgExpAngle = 0.0;
 	this.movingAvgCountLoop = 0;
-	this.movingAvgExpAlpha = 2.0 / (C.EXP_MOVAVG_N + 1.0);
+	this.movingAvgExpAlpha = 2.0 / (ASC.EXP_MOVAVG_N + 1.0);
 }
 
 /* returns average raw angle */
@@ -342,43 +337,43 @@ AS5048B.prototype.convertAngle = function (unit, angle) {
 	var angleConv;
 
 	switch (unit) {
-		case C.U_RAW:
+		case ASC.U_RAW:
 			//Sensor raw measurement
 			angleConv = angle;
 			break;
-		case C.U_TRN:
+		case ASC.U_TRN:
 			//full turn ratio
 			angleConv = (angle / R.AS5048B_RESOLUTION);
 			break;
-		case C.U_DEG:
+		case ASC.U_DEG:
 			//degree
 			angleConv = (angle / R.AS5048B_RESOLUTION) * 360.0;
 			break;
-		case C.U_RAD:
+		case ASC.U_RAD:
 			//Radian
 			angleConv = (angle / R.AS5048B_RESOLUTION) * 2 * Math.PI;
 			break;
-		case C.U_MOA:
+		case ASC.U_MOA:
 			//minute of arc
 			angleConv = (angle / R.AS5048B_RESOLUTION) * 60.0 * 360.0;
 			break;
-		case C.U_SOA:
+		case ASC.U_SOA:
 			//second of arc
 			angleConv = (angle / R.AS5048B_RESOLUTION) * 60.0 * 60.0 * 360.0;
 			break;
-		case C.U_GRAD:
+		case ASC.U_GRAD:
 			//grade
 			angleConv = (angle / R.AS5048B_RESOLUTION) * 400.0;
 			break;
-		case C.U_MILNATO:
+		case ASC.U_MILNATO:
 			//NATO MIL
 			angleConv = (angle / R.AS5048B_RESOLUTION) * 6400.0;
 			break;
-		case C.U_MILSE:
+		case ASC.U_MILSE:
 			//Swedish MIL
 			angleConv = (angle / R.AS5048B_RESOLUTION) * 6300.0;
 			break;
-		case C.U_MILRU:
+		case ASC.U_MILRU:
 			//Russian MIL
 			angleConv = (angle / R.AS5048B_RESOLUTION) * 6000.0;
 			break;
@@ -392,70 +387,42 @@ AS5048B.prototype.convertAngle = function (unit, angle) {
 }
 
 // TODO: TEST!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-AS5048B.prototype.readReg8 = function (address, length) {
-  length = length || 8;
-  this.i2c.writeTo(this.addr, address);
-  var res = this.i2c.readFrom(this.addr, length);
-  console.log('readReg8:  ', res)
-  return res;
+// Read from register, 8 bits
+AS5048B.prototype.readReg8 = function (reg, length) {
+  length = length || 1;
 
-  // var _this = this;
-	// var readValue;
-	// var requestResult;
-	// var nbByte2Read = 1;
-  //
-	// Wire.beginTransmission(_this.chipAddress);
-	// Wire.write(address);
-	// requestResult = Wire.endTransmission(false);
-	// if (requestResult) {
-	// 	console.log("I2C error: ", requestResult);
-	// }
-  //
-	// Wire.requestFrom(_chipAddress, nbByte2Read);
-	// readValue = (uint8_t) Wire.read();
-  //
-	// return readValue;
+  //8 bit value got from 1 8bits register
+  this.i2c.writeTo(this.addr, reg);
+  var d = this.i2c.readFrom(reg, length);
+  console.log('readReg8:  ', d, d[0]);
+  return d;
 }
 
-// TODO: TEST!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-AS5048B.prototype.readReg16 = function (address, length) {
-	//16 bit value got from 2 8bits registers (7..0 MSB + 5..0 LSB) => 14 bits value
-  length = length || 18;
-  this.i2c.writeTo(this.addr, address);
-  var res = this.i2c.readFrom(this.addr, length);
-  console.log('readReg16:  ', res)
-  return res;
+// Read from register, 16 bits consisting of
+// most significant bits and least significant bits
+AS5048B.prototype.readReg16 = function (reg, length) {
+  length = length || 2;
 
-	// uint8_t nbByte2Read = 2;
-	// byte requestResult;
-	// byte readArray[2];
-	// uint16_t readValue = 0;
-  //
-	// Wire.beginTransmission(_chipAddress);
-	// Wire.write(address);
-	// requestResult = Wire.endTransmission(false);
-	// if (requestResult){
-	// 	Serial.print("I2C error: ");
-	// 	Serial.println(requestResult);
-	// }
-  //
-  //
-	// Wire.requestFrom(_chipAddress, nbByte2Read);
-	// for (byte i=0; i < nbByte2Read; i++) {
-	// 	readArray[i] = Wire.read();
-	// }
-  //
-	// readValue = (((uint16_t) readArray[0]) << 6);
-	// readValue += (readArray[1] & 0x3F);
-	// /*
-	// Serial.println(readArray[0], BIN);
-	// Serial.println(readArray[1], BIN);
-	// Serial.println(readValue, BIN);
-	// */
-	// return readValue;
+	//16 bit value got from 2 8bits registers (7..0 MSB + 5..0 LSB) => 14 bits value
+  this.i2c.writeTo(this.addr, reg);
+  var d = this.i2c.readFrom(this.addr, length);
+
+  // format MSB & LSB into signed int
+  var i = d[0] << 6;
+      i += (d[1] & 0x3F);
+
+  return i;
 }
 
 // TODO: TEST!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// writes to a specific register within initialized address
 AS5048B.prototype.writeReg = function (reg, data) {
+  console.log('writeReg: data', reg, data);
   this.i2c.writeTo(this.addr, [reg].concat(data));
 }
+
+// ------------------------------------------------------
+
+
+I2C1.setup({ scl: B6, sda: B7 });
+var as = new AS5048B(I2C1);
