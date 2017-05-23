@@ -1,0 +1,33 @@
+{
+  "name": "ams5048b",
+  "version": "0.1.0",
+  "description": "Module for the AMS AS5048B Magnetic Position Sensor",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "babel lib --out-file as5048b.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TrevorJTClarke/AMS_5048b_Sensor.git"
+  },
+  "keywords": [
+    "AMS",
+    "AS5048B",
+    "AS5048",
+    "Magnetic",
+    "Position",
+    "Sensor"
+  ],
+  "author": "@trevorjtclarke",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/TrevorJTClarke/AMS_5048b_Sensor/issues"
+  },
+  "homepage": "https://github.com/TrevorJTClarke/AMS_5048b_Sensor#readme",
+  "devDependencies": {
+    "babel-cli": "^6.24.1",
+    "babel-core": "^6.21.0",
+    "babel-preset-es2015": "^6.18.0"
+  }
+}

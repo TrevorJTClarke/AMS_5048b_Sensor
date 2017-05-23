@@ -1,2 +1,4 @@
-
+*.badideas
+*.log
+/node_modules
 examplemodule.js

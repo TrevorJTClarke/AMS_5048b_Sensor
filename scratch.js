@@ -42,43 +42,6 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// Default addresses for AS5048B
-var = AS5048 = {
-  ADDRESS: 0x40, // 0b10000 + ( A1 & A2 to GND)
-  PROG_REG: 0x03,
-  ADDR_REG: 0x15,
-  ZEROMSB_REG: 0x16, //bits 0..7 (MOST SIGNIFICANT BIT)
-  ZEROLSB_REG: 0x17, //bits 0..5 (LEAST SIGNIFICANT BIT)
-  GAIN_REG: 0xFA,
-  DIAG_REG: 0xFB,
-  MAGNMSB_REG: 0xFC, //bits 0..7
-  MAGNLSB_REG: 0xFD, //bits 0..5
-  ANGLMSB_REG: 0xFE, //bits 0..7
-  ANGLLSB_REG: 0xFF, //bits 0..5
-  RESOLUTION: 16384.0 //14 bits
-}
-
-// Moving Exponential Average on angle - beware heavy calculation for some boards
-// This is a 1st order low pass filter
-// Moving average is calculated on Sine et Cosine values of the angle to provide an extrapolated accurate angle value.
-var EXP = {
-  MOVAVG_N: 5,	//history length impact on moving average impact - keep in mind the moving average will be impacted by the measurement frequency too
-  MOVAVG_LOOP: 1 //number of measurements before starting mobile Average - starting with a simple average - 1 allows a quick start. Value must be 1 minimum
-}
-
-//unit consts - just to make the units more readable
-var UNIT = {
-  RAW: 1,
-  TRN: 2,
-  DEG: 3,
-  RAD: 4,
-  GRAD: 5,
-  MOA: 6,
-  SOA: 7,
-  MILNATO: 8,
-  MILSE: 9,
-  MILRU: 10
-}
 
 // exports.connect = function (_i2c, _addr) {
 //   return new AS5048B(_i2c, _addr);
@@ -86,6 +49,39 @@ var UNIT = {
 
 /* AS5048B Object */
 function AS5048B(_i2c, _addr) {
+
+  // Default addresses for AS5048B
+  this.AS5048_ADDRESS = 0x40; // 0b10000 + ( A1 & A2 to GND)
+  this.AS5048B_PROG_REG = 0x03;
+  this.AS5048B_ADDR_REG = 0x15;
+  this.AS5048B_ZEROMSB_REG = 0x16; //bits 0..7 (MOST SIGNIFICANT BIT)
+  this.AS5048B_ZEROLSB_REG = 0x17; //bits 0..5 (LEAST SIGNIFICANT BIT)
+  this.AS5048B_GAIN_REG = 0xFA;
+  this.AS5048B_DIAG_REG = 0xFB;
+  this.AS5048B_MAGNMSB_REG = 0xFC; //bits 0..7
+  this.AS5048B_MAGNLSB_REG = 0xFD; //bits 0..5
+  this.AS5048B_ANGLMSB_REG = 0xFE; //bits 0..7
+  this.AS5048B_ANGLLSB_REG = 0xFF; //bits 0..5
+  this.AS5048B_RESOLUTION = 16384.0; //14 bits
+
+  // Moving Exponential Average on angle - beware heavy calculation for some boards
+  // This is a 1st order low pass filter
+  // Moving average is calculated on Sine et Cosine values of the angle to provide an extrapolated accurate angle value.
+  this.EXP_MOVAVG_N = 5;	//history length impact on moving average impact - keep in mind the moving average will be impacted by the measurement frequency too
+  this.EXP_MOVAVG_LOOP = 1; //number of measurements before starting mobile Average - starting with a simple average - 1 allows a quick start. Value must be 1 minimum
+
+  //unit consts - just to make the units more readable
+  this.U_RAW = 1;
+  this.U_TRN = 2;
+  this.U_DEG = 3;
+  this.U_RAD = 4;
+  this.U_GRAD = 5;
+  this.U_MOA = 6;
+  this.U_SOA = 7;
+  this.U_MILNATO = 8;
+  this.U_MILSE = 9;
+  this.U_MILRU = 10;
+
   this.i2c = _i2c;
   this.addr = _addr || this.AS5048_ADDRESS;
 
@@ -138,7 +134,7 @@ AS5048B.prototype.setClockWise = function (cw) {
  */
 AS5048B.prototype.progRegister = function (val) {
   var data = new Uint8Array(val);
-  this.i2c.writeTo(AS5048.PROG_REG, data);
+  this.i2c.writeTo(this.AS5048B_PROG_REG, data);
 }
 
 /* Burn values to the OTP register */
@@ -174,7 +170,7 @@ AS5048B.prototype.addressRegWrite = function (val) {
   var data = new Uint8Array(val);
 
 	// write the new chip address to the register
-	this.writeReg(AS5048.ADDR_REG, data);
+	this.writeReg(this.AS5048B_ADDR_REG, data);
 
 	// update our chip address with our 5 programmable bits
 	// the MSB is internally inverted, so we flip the leftmost bit
@@ -183,12 +179,12 @@ AS5048B.prototype.addressRegWrite = function (val) {
 
 /* reads I2C address register value */
 AS5048B.prototype.addressRegRead = function () {
-	return this.readReg8(AS5048.ADDR_REG);
+	return this.readReg8(this.AS5048B_ADDR_REG);
 }
 
 /* sets current angle as the zero position */
 AS5048B.prototype.setZeroPosition = function () {
-	var newZero = this.readReg16(AS5048.ANGLLSB_REG);
+	var newZero = this.readReg16(this.AS5048B_ANGLLSB_REG);
   console.log('newZero', newZero);
 	this.zeroRegWrite(0x00); //Issue closed by @MechatronicsWorkman
 	// this.zeroRegWrite(newZero);
@@ -233,36 +229,36 @@ AS5048B.prototype.setZeroPosition = function () {
  */
 AS5048B.prototype.zeroRegWrite = function (val) {
   // adjusts bits to conform to standards
-	this.writeReg(AS5048.ZEROMSB_REG, (val >> 6));
-	this.writeReg(AS5048.ZEROLSB_REG, (val & 0x3F));
+	this.writeReg(this.AS5048B_ZEROMSB_REG, (val >> 6));
+	this.writeReg(this.AS5048B_ZEROLSB_REG, (val & 0x3F));
 }
 
 /* reads the 2 bytes Zero position register value */
 /* returns uint16_t register value trimmed on 14 bits */
 AS5048B.prototype.zeroRegRead = function () {
-	return this.readReg16(AS5048.ZEROMSB_REG);
+	return this.readReg16(this.AS5048B_ZEROMSB_REG);
 }
 
 /* reads the 2 bytes magnitude register value */
 /* returns uint16_t register value trimmed on 14 bits */
 AS5048B.prototype.magnitudeRead = function () {
-	return this.readReg16(AS5048.MAGNMSB_REG);
+	return this.readReg16(this.AS5048B_MAGNMSB_REG);
 }
 
 /* reads the 2 bytes magnitude register value */
 /* returns uint16_t register value trimmed on 14 bits */
 AS5048B.prototype.angleRegRead = function () {
-	return this.readReg16(AS5048.ANGLMSB_REG);
+	return this.readReg16(this.AS5048B_ANGLMSB_REG);
 }
 
 /* reads the 1 bytes auto gain register value */
 AS5048B.prototype.getAutoGain = function () {
-	return this.readReg8(AS5048.GAIN_REG);
+	return this.readReg8(this.AS5048B_GAIN_REG);
 }
 
 /* reads the 1 bytes diagnostic register value */
 AS5048B.prototype.getDiagReg = function () {
-	return this.readReg8(AS5048.DIAG_REG);
+	return this.readReg8(this.AS5048B_DIAG_REG);
 }
 
 /**
@@ -278,9 +274,9 @@ AS5048B.prototype.angleRead = function (unit, newVal) {
 	if (newVal) {
 		if (this.clockWise) {
       // highest possible number, subtracting read number
-			angleRaw = (0b11111111111111 - this.readReg16(AS5048.ANGLLSB_REG));
+			angleRaw = (0b11111111111111 - this.readReg16(this.AS5048B_ANGLLSB_REG));
 		} else {
-			angleRaw = this.readReg16(AS5048.ANGLLSB_REG);
+			angleRaw = this.readReg16(this.AS5048B_ANGLLSB_REG);
 		}
 		this.lastAngleRaw = angleRaw;
 	} else {
@@ -295,14 +291,14 @@ AS5048B.prototype.angleRead = function (unit, newVal) {
 AS5048B.prototype.updateMovingAvgExp = function () {
 
 	//sine and cosine calculation on angles in radian
-	var angle = this.angleRead(UNIT.RAD, true);
+	var angle = this.angleRead(this.U_RAD, true);
 
-	if (this.movingAvgCountLoop < EXP.MOVAVG_LOOP) {
+	if (this.movingAvgCountLoop < this.EXP_MOVAVG_LOOP) {
 		this.movingAvgExpSin += Math.sin(angle);
 		this.movingAvgExpCos += Math.cos(angle);
-		if (this.movingAvgCountLoop == (EXP.MOVAVG_LOOP - 1)) {
-			this.movingAvgExpSin = this.movingAvgExpSin / EXP.MOVAVG_LOOP;
-			this.movingAvgExpCos = this.movingAvgExpCos / EXP.MOVAVG_LOOP;
+		if (this.movingAvgCountLoop == (this.EXP_MOVAVG_LOOP - 1)) {
+			this.movingAvgExpSin = this.movingAvgExpSin / this.EXP_MOVAVG_LOOP;
+			this.movingAvgExpCos = this.movingAvgExpCos / this.EXP_MOVAVG_LOOP;
 		}
 		this.movingAvgCountLoop++;
 	} else {
@@ -329,7 +325,7 @@ AS5048B.prototype.getMovingAvgExp = function (unit) {
 AS5048B.prototype.resetMovingAvgExp = function () {
 	this.movingAvgExpAngle = 0.0;
 	this.movingAvgCountLoop = 0;
-	this.movingAvgExpAlpha = 2.0 / (EXP.MOVAVG_N + 1.0);
+	this.movingAvgExpAlpha = 2.0 / (this.EXP_MOVAVG_N + 1.0);
 }
 
 /* returns average raw angle */
@@ -344,7 +340,7 @@ AS5048B.prototype.getExpAvgRawAngle = function () {
 		angle = Math.acos(_this.movingAvgExpCos);
 	}
 
-	angle = (angle / twopi) * AS5048.RESOLUTION;
+	angle = (angle / twopi) * this.AS5048B_RESOLUTION;
 
 	return angle;
 }
@@ -362,45 +358,45 @@ AS5048B.prototype.convertAngle = function (unit, angle) {
 	var angleConv;
 
 	switch (unit) {
-		case UNIT.RAW:
+		case this.U_RAW:
 			//Sensor raw measurement
 			angleConv = angle;
 			break;
-		case UNIT.TRN:
+		case this.U_TRN:
 			//full turn ratio
-			angleConv = (angle / AS5048.RESOLUTION);
+			angleConv = (angle / this.AS5048B_RESOLUTION);
 			break;
-		case UNIT.DEG:
+		case this.U_DEG:
 			//degree
-			angleConv = (angle / AS5048.RESOLUTION) * 360.0;
+			angleConv = (angle / this.AS5048B_RESOLUTION) * 360.0;
 			break;
-		case UNIT.RAD:
+		case this.U_RAD:
 			//Radian
-			angleConv = (angle / AS5048.RESOLUTION) * 2 * Math.PI;
+			angleConv = (angle / this.AS5048B_RESOLUTION) * 2 * Math.PI;
 			break;
-		case UNIT.MOA:
+		case this.U_MOA:
 			//minute of arc
-			angleConv = (angle / AS5048.RESOLUTION) * 60.0 * 360.0;
+			angleConv = (angle / this.AS5048B_RESOLUTION) * 60.0 * 360.0;
 			break;
-		case UNIT.SOA:
+		case this.U_SOA:
 			//second of arc
-			angleConv = (angle / AS5048.RESOLUTION) * 60.0 * 60.0 * 360.0;
+			angleConv = (angle / this.AS5048B_RESOLUTION) * 60.0 * 60.0 * 360.0;
 			break;
-		case UNIT.GRAD:
+		case this.U_GRAD:
 			//grade
-			angleConv = (angle / AS5048.RESOLUTION) * 400.0;
+			angleConv = (angle / this.AS5048B_RESOLUTION) * 400.0;
 			break;
-		case UNIT.MILNATO:
+		case this.U_MILNATO:
 			//NATO MIL
-			angleConv = (angle / AS5048.RESOLUTION) * 6400.0;
+			angleConv = (angle / this.AS5048B_RESOLUTION) * 6400.0;
 			break;
-		case UNIT.MILSE:
+		case this.U_MILSE:
 			//Swedish MIL
-			angleConv = (angle / AS5048.RESOLUTION) * 6300.0;
+			angleConv = (angle / this.AS5048B_RESOLUTION) * 6300.0;
 			break;
-		case UNIT.MILRU:
+		case this.U_MILRU:
 			//Russian MIL
-			angleConv = (angle / AS5048.RESOLUTION) * 6000.0;
+			angleConv = (angle / this.AS5048B_RESOLUTION) * 6000.0;
 			break;
 		default:
 			//no conversion => raw angle
@@ -445,3 +441,20 @@ AS5048B.prototype.writeReg = function (reg, data) {
   console.log('writeReg: data', reg, data, arr, formatted);
   this.i2c.writeTo(this.addr, formatted);
 }
+
+// ------------------------------------------------------
+
+
+I2C1.setup({ scl: B6, sda: B7 });
+var as = new AS5048B(I2C1);
+var angl = as.angleRead(as.U_DEG, true);
+console.log('zeroRegRead', as.zeroRegRead())
+console.log('setZeroPosition', as.setZeroPosition())
+angl = as.angleRead(as.U_DEG, true);
+// console.log('updateMovingAvgExp', as.updateMovingAvgExp())
+// console.log('getMovingAvgExp', as.getMovingAvgExp())
+
+// setInterval(function(){
+//   var angl = as.angleRead(as.U_DEG, true);
+//   console.log('angl:', angl);
+// }, 2000);

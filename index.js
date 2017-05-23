@@ -43,7 +43,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 // Default addresses for AS5048B
-var = AS5048 = {
+const = AS5048 = {
   ADDRESS: 0x40, // 0b10000 + ( A1 & A2 to GND)
   PROG_REG: 0x03,
   ADDR_REG: 0x15,
@@ -61,13 +61,13 @@ var = AS5048 = {
 // Moving Exponential Average on angle - beware heavy calculation for some boards
 // This is a 1st order low pass filter
 // Moving average is calculated on Sine et Cosine values of the angle to provide an extrapolated accurate angle value.
-var EXP = {
+const EXP = {
   MOVAVG_N: 5,	//history length impact on moving average impact - keep in mind the moving average will be impacted by the measurement frequency too
   MOVAVG_LOOP: 1 //number of measurements before starting mobile Average - starting with a simple average - 1 allows a quick start. Value must be 1 minimum
 }
 
 //unit consts - just to make the units more readable
-var UNIT = {
+const UNIT = {
   RAW: 1,
   TRN: 2,
   DEG: 3,
@@ -95,11 +95,6 @@ function AS5048B(_i2c, _addr) {
 	this.addressRegVal = new Uint8Array(0);
 	this.zeroRegVal = new Uint16Array(0);
 	this.lastAngleRaw = 0;
-	this.movingAvgExpAngle = 0;
-	this.movingAvgExpSin = 0;
-	this.movingAvgExpCos = 0;
-	this.movingAvgExpAlpha = 0;
-	this.movingAvgCountLoop = 0;
 
   this.initialize();
 }
@@ -116,8 +111,6 @@ AS5048B.prototype.initialize = function() {
   // 4. ready to operate
 	this.zeroRegVal = this.zeroRegRead();
 	this.addressRegVal = this.addressRegRead();
-
-	this.resetMovingAvgExp();
 };
 
 /**
@@ -128,7 +121,6 @@ AS5048B.prototype.initialize = function() {
 AS5048B.prototype.setClockWise = function (cw) {
 	this.clockWise = cw;
 	this.lastAngleRaw = 0.0;
-	this.resetMovingAvgExp();
 }
 
 /**
@@ -288,65 +280,6 @@ AS5048B.prototype.angleRead = function (unit, newVal) {
 	}
 
 	return this.convertAngle(unit, angleRaw);
-}
-
-/* Performs an exponential moving average on the angle. */
-/* Works on Sine and Cosine of the angle to avoid issues 0°/360° discontinuity */
-AS5048B.prototype.updateMovingAvgExp = function () {
-
-	//sine and cosine calculation on angles in radian
-	var angle = this.angleRead(UNIT.RAD, true);
-
-	if (this.movingAvgCountLoop < EXP.MOVAVG_LOOP) {
-		this.movingAvgExpSin += Math.sin(angle);
-		this.movingAvgExpCos += Math.cos(angle);
-		if (this.movingAvgCountLoop == (EXP.MOVAVG_LOOP - 1)) {
-			this.movingAvgExpSin = this.movingAvgExpSin / EXP.MOVAVG_LOOP;
-			this.movingAvgExpCos = this.movingAvgExpCos / EXP.MOVAVG_LOOP;
-		}
-		this.movingAvgCountLoop++;
-	} else {
-		var movavgexpsin = this.movingAvgExpSin + this.movingAvgExpAlpha * (Math.sin(angle) - this.movingAvgExpSin);
-		var movavgexpcos = this.movingAvgExpCos + this.movingAvgExpAlpha * (Math.cos(angle) - this.movingAvgExpCos);
-		this.movingAvgExpSin = movavgexpsin;
-		this.movingAvgExpCos = movavgexpcos;
-		this.movingAvgExpAngle = this.getExpAvgRawAngle();
-	}
-
-}
-
-/**
- * sent back the exponential moving averaged angle in the desired unit
- *
- * @param unit : string expressing the unit of the angle. Sensor raw value as default
- * @return exponential moving averaged angle value
- */
-AS5048B.prototype.getMovingAvgExp = function (unit) {
-	return this.convertAngle(unit, this.movingAvgExpAngle);
-}
-
-/* resets moving AVG */
-AS5048B.prototype.resetMovingAvgExp = function () {
-	this.movingAvgExpAngle = 0.0;
-	this.movingAvgCountLoop = 0;
-	this.movingAvgExpAlpha = 2.0 / (EXP.MOVAVG_N + 1.0);
-}
-
-/* returns average raw angle */
-AS5048B.prototype.getExpAvgRawAngle = function () {
-  var _this = this;
-	var angle;
-	var twopi = 2 * Math.PI;
-
-	if (this.movingAvgExpSin < 0.0) {
-		angle = twopi - Math.acos(_this.movingAvgExpCos);
-	} else {
-		angle = Math.acos(_this.movingAvgExpCos);
-	}
-
-	angle = (angle / twopi) * AS5048.RESOLUTION;
-
-	return angle;
 }
 
 /**
